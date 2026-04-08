@@ -7,9 +7,8 @@ import requests
 from PIL import Image
 
 # --- 1. CONFIGURAÇÕES E CHAVES ---
-st.set_page_config(page_title="OddBra Tv - Dashboard", layout="wide")
+st.set_page_config(page_title="OddBra Tv - Radar Global", layout="wide")
 
-# Suas chaves (The Odds API e Gemini)
 ODDS_API_KEY = "45984338b7cc6ae21c8fc1907d8b5bac"
 GENAI_API_KEY = "AIzaSyDJ9k6k9u0moVjV5ZqQPZUW-ciOvENbLJ0"
 
@@ -21,7 +20,6 @@ ARQUIVO = "banca_oddbra.json"
 
 def carregar_dados():
     if not os.path.exists(ARQUIVO):
-        # Inicia com seu histórico atual
         return {"historico": [], "lucro_acumulado": 2595.74, "total_apostado": 4056.00}
     with open(ARQUIVO, 'r') as f:
         return json.load(f)
@@ -35,16 +33,16 @@ dados = carregar_dados()
 # --- 3. FUNÇÕES IA (AUDITORIA E LEITURA) ---
 
 def explicar_red_ia(evento, odd, motivo):
-    prompt = f"Analise como o Advogado do Diabo da OddBra Tv: O evento {evento} com odd {odd} deu RED. Motivo: {motivo}. Explique tecnicamente por que perdemos e use gírias de apostador profissional."
+    prompt = f"Analise como o Advogado do Diabo da OddBra Tv: O evento {evento} com odd {odd} deu RED. Motivo: {motivo}. Explique tecnicamente e use gírias de bettor profissional."
     try:
         response = model.generate_content(prompt)
         return response.text
     except:
-        return "IA offline no momento."
+        return "IA offline."
 
 def ler_print_bet365(imagem):
     prompt = """Analise este print da Bet365 e extraia: Nome do Evento, Stake e Odd. 
-    Retorne APENAS um JSON no formato: {"evento": "nome", "stake": 0.0, "odd": 0.0}"""
+    Retorne APENAS um JSON: {"evento": "nome", "stake": 0.0, "odd": 0.0}"""
     img = Image.open(imagem)
     response = model.generate_content([prompt, img])
     texto = response.text.replace("```json", "").replace("```", "").strip()
@@ -54,22 +52,20 @@ def ler_print_bet365(imagem):
 st.sidebar.title("🚀 OddBra Tv")
 st.sidebar.divider()
 
-# Registro Automático
 st.sidebar.subheader("📸 Registro por Print")
 arquivo_print = st.sidebar.file_uploader("Suba o print da aposta", type=["png", "jpg", "jpeg"])
 
-# Variáveis de preenchimento automático
 ev_l, st_l, od_l = "", 0.0, 1.01
 
 if arquivo_print:
     if st.sidebar.button("🤖 IA, Ler Print"):
-        with st.spinner('Lendo dados do bilhete...'):
+        with st.spinner('Lendo bilhete...'):
             try:
                 res = ler_print_bet365(arquivo_print)
                 ev_l, st_l, od_l = res['evento'], res['stake'], res['odd']
                 st.sidebar.success("Dados extraídos!")
             except:
-                st.sidebar.error("Erro ao ler print.")
+                st.sidebar.error("Erro ao ler imagem.")
 
 st.sidebar.divider()
 st.sidebar.subheader("📝 Confirmar Bilhete")
@@ -83,53 +79,85 @@ if st.sidebar.button("Salvar na Banca"):
     lucro = (f_stake * f_odd - f_stake) if f_res == "Green" else (-f_stake if f_res == "Red" else 0)
     audit = explicar_red_ia(f_nome, f_odd, f_motivo) if f_res == "Red" else "-"
     
-    nova = {
-        "Data": pd.Timestamp.now().strftime("%d/%m/%Y"), 
-        "Evento": f_nome, 
-        "Stake": f_stake, 
-        "Odd": f_odd, 
-        "Res": f_res, 
-        "Lucro": lucro, 
-        "Auditoria_IA": audit
-    }
-    
+    nova = {"Data": pd.Timestamp.now().strftime("%d/%m/%Y"), "Evento": f_nome, "Stake": f_stake, "Odd": f_odd, "Res": f_res, "Lucro": lucro, "Auditoria_IA": audit}
     dados["historico"].append(nova)
     dados["lucro_acumulado"] += lucro
     dados["total_apostado"] += f_stake
     salvar_dados(dados)
-    st.sidebar.success("Salvo com sucesso!")
+    st.sidebar.success("Salvo!")
     st.rerun()
 
-# --- 5. DASHBOARD PRINCIPAL ---
+# --- 5. DASHBOARD ---
 st.title("🏆 OddBra Tv: Gestão de Elite")
-col1, col2, col3 = st.columns(3)
-col1.metric("Lucro Líquido", f"R$ {dados['lucro_acumulado']:.2f}")
-col2.metric("Total Apostado", f"R$ {dados['total_apostado']:.2f}")
+c1, c2, c3 = st.columns(3)
+c1.metric("Lucro Líquido", f"R$ {dados['lucro_acumulado']:.2f}")
+c2.metric("Total Apostado", f"R$ {dados['total_apostado']:.2f}")
 roi = (dados['lucro_acumulado'] / dados['total_apostado'] * 100) if dados['total_apostado'] > 0 else 0
-col3.metric("ROI Geral", f"{roi:.2f}%")
+c3.metric("ROI Geral", f"{roi:.2f}%")
 
 st.divider()
 
-# --- 6. BUSCA DE ODDS (IA) ---
-st.subheader("🎯 Picks Sugeridas pela IA (Série A)")
-if st.button("🔍 Buscar Jogos de Hoje"):
-    url = f"https://api.the-odds-api.com/v4/sports/soccer_brazil_campeonato_brasileiro_serie_a/odds/?apiKey={ODDS_API_KEY}&regions=us&markets=h2h"
-    with st.spinner('Varrendo mercado e notícias locais...'):
-        resp = requests.get(url)
-        if resp.status_code == 200:
-            prompt = f"Analise estas odds da Série A: {resp.json()[:8]}. Sugira 3 picks de valor, considere clima e notícias. Use gírias de bettor profissional da OddBra Tv."
-            analise = model.generate_content(prompt)
-            st.info(analise.text)
-        else:
-            st.error("Erro na API de Odds.")
+# --- 6. RADAR OMNI-LIGAS (FUTEBOL MUNDIAL + NBA/MLB/TENIS) ---
+st.subheader("🎯 Radar OddBra: Scanner Global de Valor")
+if st.button("🔍 Iniciar Varredura de Todos os Campeonatos"):
+    
+    with st.spinner('IA OddBra varrendo TODOS os campeonatos de futebol do mundo e ligas de elite...'):
+        try:
+            # 1. Busca TODAS as ligas disponíveis na API
+            url_esportes = f"https://api.the-odds-api.com/v4/sports/?apiKey={ODDS_API_KEY}"
+            res_esp = requests.get(url_esportes).json()
+            
+            # 2. Filtramos: Futebol (Todos), Basquete (Só NBA, NBB, Euroleague), MLB e Tenis
+            ligas_selecionadas = []
+            for esp in res_esp:
+                key = esp['key']
+                # Regra Futebol: Qualquer um
+                if "soccer" in key:
+                    ligas_selecionadas.append(key)
+                # Regra Basquete: Só as 3 de elite
+                elif key in ["basketball_nba", "basketball_brazil_nbb", "basketball_euroleague"]:
+                    ligas_selecionadas.append(key)
+                # Regra MLB e Tenis
+                elif "baseball_mlb" in key or "tennis" in key:
+                    ligas_selecionadas.append(key)
+            
+            # 3. Busca odds das 15 primeiras ligas encontradas (para não estourar a API)
+            dados_mercado = []
+            for liga in ligas_selecionadas[:15]:
+                url_odds = f"https://api.the-odds-api.com/v4/sports/{liga}/odds/?apiKey={ODDS_API_KEY}&regions=us&markets=h2h"
+                res_odds = requests.get(url_odds)
+                if res_odds.status_code == 200:
+                    jogos = res_odds.json()
+                    if jogos:
+                        dados_mercado.append({"liga": liga, "odds": jogos[:5]})
+
+            if dados_mercado:
+                prompt = f"""
+                Analise como o Analista-Chefe da OddBra Tv: {dados_mercado}
+                
+                DIRETRIZES:
+                1. Futebol: Varra todos os campeonatos mundiais enviados. Ache valor onde ninguém está olhando.
+                2. Basquete: Foco total em NBA, NBB ou Euroleague. Use o fator cansaço.
+                3. MLB: Use Sabermetrics e pitchers titulares.
+                4. Identifique as 5 melhores entradas globais, a 'Zebra do Mundo' e o 'Bilhete de Ouro'.
+                5. Use gírias de bettor e seja extremamente técnico e direto.
+                """
+                analise = model.generate_content(prompt)
+                st.info(analise.text)
+            else:
+                st.warning("⚠️ Nenhuma odd disponível no radar agora.")
+        except Exception as e:
+            st.error(f"Erro na varredura global: {e}")
 
 st.divider()
 
 # --- 7. HISTÓRICO ---
 if dados["historico"]:
-    st.subheader("📋 Auditoria e Histórico")
-    df = pd.DataFrame(dados["historico"])
-    st.dataframe(df, use_container_width=True)
-else:
-    st.info("Nenhuma aposta registrada no site ainda.")
+    st.subheader("📋 Histórico e Auditoria")
+    st.dataframe(pd.DataFrame(dados["historico"]), use_container_width=True)
+
+
+
+
+
 
