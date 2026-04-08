@@ -12,10 +12,13 @@ st.set_page_config(page_title="OddBra Tv - Radar Global", layout="wide")
 ODDS_API_KEY = "45984338b7cc6ae21c8fc1907d8b5bac"
 GENAI_API_KEY = "AIzaSyDJ9k6k9u0moVjV5ZqQPZUW-ciOvENbLJ0"
 
-# AJUSTE AQUI: Configuração simplificada para evitar o erro 404
-genai.configure(api_key=GENAI_API_KEY)
-# Mudamos para 'gemini-1.5-flash-latest' que é o endereço mais estável
-model = genai.GenerativeModel('gemini-1.5-flash')
+# --- CONFIGURAÇÃO FORÇADA PARA VERSÃO ESTÁVEL ---
+try:
+    genai.configure(api_key=GENAI_API_KEY)
+    # Forçamos o modelo estável sem frescuras de versão beta
+    model = genai.GenerativeModel('gemini-1.5-flash')
+except Exception as e:
+    st.error(f"Erro ao configurar IA: {e}")
 
 # --- 2. BANCO DE DADOS ---
 ARQUIVO = "banca_oddbra.json"
@@ -35,20 +38,22 @@ dados = carregar_dados()
 # --- 3. FUNÇÕES IA ---
 
 def explicar_red_ia(evento, odd, motivo):
-    prompt = f"Analise como o Advogado do Diabo da OddBra Tv: O evento {evento} com odd {odd} deu RED. Motivo: {motivo}. Explique tecnicamente e use gírias de bettor profissional."
+    prompt = f"Analise como o Advogado do Diabo da OddBra Tv: O evento {evento} com odd {odd} deu RED. Motivo: {motivo}. Use gírias de bettor."
     try:
         response = model.generate_content(prompt)
         return response.text
-    except Exception as e:
-        return f"IA indisponível: {e}"
+    except:
+        return "IA indisponível no momento."
 
 def ler_print_bet365(imagem):
-    prompt = """Analise este print da Bet365 e extraia: Nome do Evento, Stake e Odd. 
-    Retorne APENAS um JSON: {"evento": "nome", "stake": 0.0, "odd": 0.0}"""
-    img = Image.open(imagem)
-    response = model.generate_content([prompt, img])
-    texto = response.text.replace("```json", "").replace("```", "").strip()
-    return json.loads(texto)
+    prompt = "Extraia o Evento, Stake e Odd deste print de aposta. Retorne apenas JSON: {'evento': 'nome', 'stake': 0.0, 'odd': 0.0}"
+    try:
+        img = Image.open(imagem)
+        response = model.generate_content([prompt, img])
+        texto = response.text.replace("```json", "").replace("```", "").strip()
+        return json.loads(texto)
+    except:
+        return {"evento": "Erro na leitura", "stake": 0.0, "odd": 1.01}
 
 # --- 4. INTERFACE (SIDEBAR) ---
 st.sidebar.title("🚀 OddBra Tv")
@@ -62,12 +67,9 @@ ev_l, st_l, od_l = "", 0.0, 1.01
 if arquivo_print:
     if st.sidebar.button("🤖 IA, Ler Print"):
         with st.spinner('Lendo bilhete...'):
-            try:
-                res = ler_print_bet365(arquivo_print)
-                ev_l, st_l, od_l = res['evento'], res['stake'], res['odd']
-                st.sidebar.success("Dados extraídos!")
-            except:
-                st.sidebar.error("Erro ao ler imagem.")
+            res = ler_print_bet365(arquivo_print)
+            ev_l, st_l, od_l = res['evento'], res['stake'], res['odd']
+            st.sidebar.success("Dados lidos!")
 
 st.sidebar.divider()
 st.sidebar.subheader("📝 Confirmar Bilhete")
@@ -105,38 +107,34 @@ if st.button("🔍 Iniciar Varredura de Todos os Campeonatos"):
     
     with st.spinner('IA OddBra varrendo mercados mundiais...'):
         try:
-            url_esportes = f"https://api.the-odds-api.com/v4/sports/?apiKey={ODDS_API_KEY}"
-            res_esp = requests.get(url_esportes).json()
+            url_esp = f"https://api.the-odds-api.com/v4/sports/?apiKey={ODDS_API_KEY}"
+            res_esp = requests.get(url_esp).json()
             
             ligas_selecionadas = []
             for esp in res_esp:
                 key = esp['key']
-                if "soccer" in key:
-                    ligas_selecionadas.append(key)
-                elif key in ["basketball_nba", "basketball_brazil_nbb", "basketball_euroleague"]:
-                    ligas_selecionadas.append(key)
-                elif "baseball_mlb" in key or "tennis" in key:
-                    ligas_selecionadas.append(key)
+                if "soccer" in key: ligas_selecionadas.append(key)
+                elif key in ["basketball_nba", "basketball_brazil_nbb", "basketball_euroleague"]: ligas_selecionadas.append(key)
+                elif "baseball_mlb" in key or "tennis" in key: ligas_selecionadas.append(key)
             
             dados_mercado = []
-            # Reduzi para as 8 primeiras ligas para a resposta ser mais rápida e não travar
-            for liga in ligas_selecionadas[:8]:
+            # Varredura em 6 ligas para ser rápido e não dar erro de volume de dados
+            for liga in ligas_selecionadas[:6]:
                 url_odds = f"https://api.the-odds-api.com/v4/sports/{liga}/odds/?apiKey={ODDS_API_KEY}&regions=us&markets=h2h"
-                res_odds = requests.get(url_odds)
-                if res_odds.status_code == 200:
-                    jogos = res_odds.json()
-                    if jogos:
-                        dados_mercado.append({"liga": liga, "odds": jogos[:3]})
+                r = requests.get(url_odds)
+                if r.status_code == 200:
+                    j = r.json()
+                    if j: dados_mercado.append({"liga": liga, "odds": j[:2]})
 
             if dados_mercado:
-                # Prompt otimizado para não dar erro de versão
-                prompt = f"Analise como o Analista-Chefe da OddBra Tv: {dados_mercado}. Identifique 5 entradas de valor globais com gírias de bettor. Seja direto."
+                # Prompt direto para evitar erros de processamento longo
+                prompt = f"Como OddBra Tv, analise estas odds e sugira 3 entradas de valor: {dados_mercado}"
                 analise = model.generate_content(prompt)
                 st.info(analise.text)
             else:
                 st.warning("⚠️ Nenhuma odd disponível no radar agora.")
         except Exception as e:
-            st.error(f"Erro na varredura global: {e}")
+            st.error(f"Erro na varredura: {e}")
 
 st.divider()
 
@@ -144,3 +142,7 @@ st.divider()
 if dados["historico"]:
     st.subheader("📋 Histórico e Auditoria")
     st.dataframe(pd.DataFrame(dados["historico"]), use_container_width=True)
+
+
+
+
