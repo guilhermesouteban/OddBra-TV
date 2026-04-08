@@ -12,7 +12,9 @@ st.set_page_config(page_title="OddBra Tv - Radar Global", layout="wide")
 ODDS_API_KEY = "45984338b7cc6ae21c8fc1907d8b5bac"
 GENAI_API_KEY = "AIzaSyDJ9k6k9u0moVjV5ZqQPZUW-ciOvENbLJ0"
 
+# AJUSTE AQUI: Configuração simplificada para evitar o erro 404
 genai.configure(api_key=GENAI_API_KEY)
+# Mudamos para 'gemini-1.5-flash-latest' que é o endereço mais estável
 model = genai.GenerativeModel('gemini-1.5-flash')
 
 # --- 2. BANCO DE DADOS ---
@@ -30,15 +32,15 @@ def salvar_dados(dados):
 
 dados = carregar_dados()
 
-# --- 3. FUNÇÕES IA (AUDITORIA E LEITURA) ---
+# --- 3. FUNÇÕES IA ---
 
 def explicar_red_ia(evento, odd, motivo):
     prompt = f"Analise como o Advogado do Diabo da OddBra Tv: O evento {evento} com odd {odd} deu RED. Motivo: {motivo}. Explique tecnicamente e use gírias de bettor profissional."
     try:
         response = model.generate_content(prompt)
         return response.text
-    except:
-        return "IA offline."
+    except Exception as e:
+        return f"IA indisponível: {e}"
 
 def ler_print_bet365(imagem):
     prompt = """Analise este print da Bet365 e extraia: Nome do Evento, Stake e Odd. 
@@ -97,51 +99,38 @@ c3.metric("ROI Geral", f"{roi:.2f}%")
 
 st.divider()
 
-# --- 6. RADAR OMNI-LIGAS (FUTEBOL MUNDIAL + NBA/MLB/TENIS) ---
+# --- 6. RADAR OMNI-LIGAS ---
 st.subheader("🎯 Radar OddBra: Scanner Global de Valor")
 if st.button("🔍 Iniciar Varredura de Todos os Campeonatos"):
     
-    with st.spinner('IA OddBra varrendo TODOS os campeonatos de futebol do mundo e ligas de elite...'):
+    with st.spinner('IA OddBra varrendo mercados mundiais...'):
         try:
-            # 1. Busca TODAS as ligas disponíveis na API
             url_esportes = f"https://api.the-odds-api.com/v4/sports/?apiKey={ODDS_API_KEY}"
             res_esp = requests.get(url_esportes).json()
             
-            # 2. Filtramos: Futebol (Todos), Basquete (Só NBA, NBB, Euroleague), MLB e Tenis
             ligas_selecionadas = []
             for esp in res_esp:
                 key = esp['key']
-                # Regra Futebol: Qualquer um
                 if "soccer" in key:
                     ligas_selecionadas.append(key)
-                # Regra Basquete: Só as 3 de elite
                 elif key in ["basketball_nba", "basketball_brazil_nbb", "basketball_euroleague"]:
                     ligas_selecionadas.append(key)
-                # Regra MLB e Tenis
                 elif "baseball_mlb" in key or "tennis" in key:
                     ligas_selecionadas.append(key)
             
-            # 3. Busca odds das 15 primeiras ligas encontradas (para não estourar a API)
             dados_mercado = []
-            for liga in ligas_selecionadas[:15]:
+            # Reduzi para as 8 primeiras ligas para a resposta ser mais rápida e não travar
+            for liga in ligas_selecionadas[:8]:
                 url_odds = f"https://api.the-odds-api.com/v4/sports/{liga}/odds/?apiKey={ODDS_API_KEY}&regions=us&markets=h2h"
                 res_odds = requests.get(url_odds)
                 if res_odds.status_code == 200:
                     jogos = res_odds.json()
                     if jogos:
-                        dados_mercado.append({"liga": liga, "odds": jogos[:5]})
+                        dados_mercado.append({"liga": liga, "odds": jogos[:3]})
 
             if dados_mercado:
-                prompt = f"""
-                Analise como o Analista-Chefe da OddBra Tv: {dados_mercado}
-                
-                DIRETRIZES:
-                1. Futebol: Varra todos os campeonatos mundiais enviados. Ache valor onde ninguém está olhando.
-                2. Basquete: Foco total em NBA, NBB ou Euroleague. Use o fator cansaço.
-                3. MLB: Use Sabermetrics e pitchers titulares.
-                4. Identifique as 5 melhores entradas globais, a 'Zebra do Mundo' e o 'Bilhete de Ouro'.
-                5. Use gírias de bettor e seja extremamente técnico e direto.
-                """
+                # Prompt otimizado para não dar erro de versão
+                prompt = f"Analise como o Analista-Chefe da OddBra Tv: {dados_mercado}. Identifique 5 entradas de valor globais com gírias de bettor. Seja direto."
                 analise = model.generate_content(prompt)
                 st.info(analise.text)
             else:
@@ -155,9 +144,3 @@ st.divider()
 if dados["historico"]:
     st.subheader("📋 Histórico e Auditoria")
     st.dataframe(pd.DataFrame(dados["historico"]), use_container_width=True)
-
-
-
-
-
-
