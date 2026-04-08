@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import json
 import os
+import google.generativeai as genai
+import requests
+import datetime
 
 # Configuração da Página
 st.set_page_config(page_title="OddBra Tv - Dashboard", layout="wide")
@@ -68,6 +71,7 @@ import requests
 
 # Configurações das APIs
 ODDS_API_KEY = "45984338b7cc6ae21c8fc1907d8b5bac"
+model = genai.GenerativeModel('gemini-1.5-flash')
 GENAI_API_KEY = "AIzaSyDJ9k6k9u0moVjV5ZqQPZUW-ciOvENbLJ0"
 
 st.divider()
