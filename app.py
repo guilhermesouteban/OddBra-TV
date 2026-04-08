@@ -97,5 +97,6 @@ if st.button("Buscar Melhores Oportunidades de Hoje"):
         analise_ia = model.generate_content(prompt_especialista)
         st.success("💰 Picks Selecionadas pela IA:")
         st.write(analise_ia.text)
-    else:
+        else:
         st.error("Erro ao buscar odds. Verifique sua chave da API.")
+   
