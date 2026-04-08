@@ -63,3 +63,39 @@ if dados["historico"]:
     st.dataframe(df, use_container_width=True)
 else:
     st.info("Nenhuma aposta registrada no site ainda.")
+
+import requests
+
+# Configurações das APIs
+ODDS_API_KEY = "45984338b7cc6ae21c8fc1907d8b5bac"
+GENAI_API_KEY = "AIzaSyDJ9k6k9u0moVjV5ZqQPZUW-ciOvENbLJ0"
+
+st.divider()
+st.subheader("🎯 Palpites de Elite da OddBra IA")
+
+if st.button("Buscar Melhores Oportunidades de Hoje"):
+    # 1. Busca jogos de Futebol (ou NBA/MLB mudando o esporte)
+    # Exemplo: soccer_brazil_campeonato_brasileiro_serie_a ou basketball_nba
+    url = f"https://api.the-odds-api.com/v4/sports/soccer_brazil_campeonato_brasileiro_serie_a/odds/?apiKey={ODDS_API_KEY}&regions=us&markets=h2h"
+    
+    response = requests.get(url)
+    if response.status_code == 200:
+        jogos = response.json()
+        
+        # 2. Passa os dados brutos para a IA analisar
+        prompt_especialista = f"""
+        Como um analista senior da OddBra Tv, analise estes dados de odds: {jogos[:10]}
+        
+        Sua tarefa:
+        1. Identifique os 3 jogos mais promissores.
+        2. Justifique com base em probabilidade implícita (transforme odd em %).
+        3. Dê um palpite de 'Aposta Sugerida' (ex: ML, Handicap ou Over/Under).
+        4. Seja direto e use gírias de apostador profissional.
+        5. Analise todas as probabilidades e adversidades do jogo pesquisando em jornais locais , especialistas , condições climaticas.
+        """
+        
+        analise_ia = model.generate_content(prompt_especialista)
+        st.success("💰 Picks Selecionadas pela IA:")
+        st.write(analise_ia.text)
+    else:
+        st.error("Erro ao buscar odds. Verifique sua chave da API.")
